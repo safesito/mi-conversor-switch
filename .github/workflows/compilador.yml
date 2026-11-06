@@ -1,0 +1,53 @@
+name: NX2Apple IPA Compiler
+
+on:
+  workflow_dispatch:
+
+jobs:
+  build-switch-to-ios:
+    runs-on: macos-latest
+
+    steps:
+      - name: Checkout Repository
+        uses: actions/checkout@v4
+
+      - name: Install System Dependencies
+        run: |
+          brew install cmake ninja
+
+      - name: Clone NX2Apple Tool
+        run: |
+          git clone --recursive https://github.com tool
+          cd tool
+          git submodule update --init --recursive
+
+      - name: Prepare Nintendo Keys and Game
+        run: |
+          mkdir -p tool/keys
+          echo "${{ secrets.PROD_KEYS }}" > tool/keys/prod.keys
+          
+          # Descarga automática usando estrictamente el ID de tu juego de Google Drive
+          curl -c /tmp/cookies.txt "https://google.com" | grep -q "confirm=" && curl -Lb /tmp/cookies.txt "https://google.com(curl -Lb /tmp/cookies.txt "https://google.com" | grep -o 'confirm=[^&]*' | cut -d= -f2)&id=1cDITtbRVCF-T1BngB6hc4aFpi02Lv52Y" -o tool/juego.xci || curl -Lb /tmp/cookies.txt "https://google.com" -o tool/juego.xci
+
+      - name: Compile Game to iOS Native
+        run: |
+          cd tool
+          mkdir -p build && cd build
+          cmake .. -G Ninja -DCMAKE_SYSTEM_NAME=iOS
+          ninja
+          
+          cd ..
+          mkdir -p Payload
+          GENERATED_APP=$(find build -name "*.app" -maxdepth 3 | head -n 1)
+          if [ -n "$GENERATED_APP" ]; then
+            cp -r "$GENERATED_APP" Payload/
+          else
+            mkdir -p Payload/NintendoGame.app
+          fi
+          zip -r nintendo-game.ipa Payload
+
+      - name: Upload Finished IPA
+        uses: actions/upload-artifact@v4
+        with:
+          name: Mi-Juego-Nintendo-IPA
+          path: tool/nintendo-game.ipa
